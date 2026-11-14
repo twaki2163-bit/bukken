@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="物件巡回">
+<title>物件巡回</title>
+<style>
+:root{
+  --bg:#f3f5f8; --card:#fff; --ink:#0b1b33; --sub:#51607a; --line:#cfd6e2;
+  --main:#0a3d91; --accent:#ffc400; --ok:#1b7f3b; --warn:#b42318;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#0b1220;--card:#162036;--ink:#f2f5fb;--sub:#a9b6cf;--line:#2c3a58;--main:#6aa5ff;--accent:#ffc400;--ok:#4cd07d;--warn:#ff8a80}
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;font-size:18px;line-height:1.5;padding:0 0 env(safe-area-inset-bottom,0)}
+.wrap{max-width:720px;margin:0 auto;padding:0 12px 40px}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:env(safe-area-inset-top,0) 0 8px}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding-top:10px}
+.tab{appearance:none;border:2px solid var(--line);background:var(--card);color:var(--ink);border-radius:14px;padding:10px 0 8px;font-size:28px;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums}
+.tab small{display:block;font-size:13px;font-weight:600;color:var(--sub);margin-top:2px}
+.tab[aria-selected="true"]{background:var(--main);border-color:var(--main);color:#fff}
+.tab[aria-selected="true"] small{color:#dbe7ff}
+.btn{appearance:none;border:0;border-radius:14px;min-height:54px;padding:0 18px;font-size:18px;font-weight:700;color:#fff;background:var(--main);width:100%}
+.btn.accent{background:var(--accent);color:#1a1300}
+.btn.ghost{background:transparent;color:var(--main);border:2px solid var(--main)}
+.btn.danger{background:transparent;color:var(--warn);border:2px solid var(--warn)}
+.btn:disabled{opacity:.55}
+.btn:active{transform:scale(.98)}
+.route{margin:10px 0 4px}
+.status{min-height:24px;font-size:15px;color:var(--sub);margin:6px 2px}
+.status.err{color:var(--warn)}
+.panel{background:var(--card);border:2px solid var(--line);border-radius:16px;padding:14px;margin:10px 0}
+.panel h2{margin:0 0 10px;font-size:18px}
+label{display:block;font-size:15px;font-weight:700;color:var(--sub);margin:10px 0 4px}
+input[type=text],select{width:100%;min-height:54px;border:2px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);padding:0 12px;font-size:18px;font-family:inherit}
+input:focus,select:focus{outline:3px solid var(--accent);border-color:var(--accent)}
+.row{display:flex;gap:8px;margin-top:14px}
+.row .btn{flex:1}
+.list{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+.item{background:var(--card);border:2px solid var(--line);border-left:8px solid var(--main);border-radius:16px;padding:12px}
+.item.p1{border-left-color:var(--warn)}
+.item.p2{border-left-color:var(--accent)}
+.item.done{opacity:.5;border-left-color:var(--line)}
+.item.done .name{text-decoration:line-through}
+.top{display:flex;gap:12px;align-items:flex-start}
+.chk{width:34px;height:34px;flex:none;margin-top:2px;accent-color:var(--ok)}
+.name{font-size:20px;font-weight:800;word-break:break-all}
+.addr{font-size:16px;color:var(--sub);word-break:break-all}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.tag{font-size:14px;font-weight:700;padding:2px 10px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+.tag.pri{background:var(--accent);color:#1a1300;border-color:var(--accent)}
+.tag.bad{color:var(--warn);border-color:var(--warn)}
+.acts{display:grid;grid-template-columns:1fr auto auto;gap:8px;margin-top:10px}
+.acts .btn{min-height:50px;padding:0 14px}
+.empty{text-align:center;color:var(--sub);padding:28px 8px;border:2px dashed var(--line);border-radius:16px}
+.foot{margin-top:28px;display:grid;gap:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="時間帯"></nav>
+  </header>
+
+  <div class="route">
+    <button class="btn accent" id="routeBtn">ルート順を自動計算</button>
+    <div class="status" id="status" role="status" aria-live="polite"></div>
+  </div>
+
+  <section class="list" id="list"></section>
+
+  <section class="panel" id="formPanel">
+    <h2 id="formTitle">物件を追加</h2>
+    <label for="fName">物件名（必須）</label>
+    <input type="text" id="fName" autocomplete="off" placeholder="例：サンハイツ201">
+    <label for="fAddr">住所（必須）</label>
+    <input type="text" id="fAddr" autocomplete="off" placeholder="例：東京都千代田区丸の内1-1-1">
+    <label for="fPri">優先順位</label>
+    <select id="fPri">
+      <option value="0">指定なし</option>
+      <option value="1">1番目</option>
+      <option value="2">2番目</option>
+    </select>
+    <div class="row">
+      <button class="btn ghost" id="cancelBtn" hidden>キャンセル</button>
+      <button class="btn" id="saveBtn">追加する</button>
+    </div>
+  </section>
+
+  <div class="foot">
+    <button class="btn danger" id="clearSlot">この時間帯をクリア</button>
+    <button class="btn danger" id="clearAll">全データをリセット</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var SLOTS=['01','02','04','05'];
+  var KEY='bukkenJunkai.v1';
+  var state=load();
+  var editId=null;
+  var $=function(id){return document.getElementById(id)};
+
+  function load(){
+    try{
+      var s=JSON.parse(localStorage.getItem(KEY)||'null');
+      if(s&&s.items)return s;
+    }catch(e){}
+    return {slot:'01',items:[]};
+  }
+  function save(){
+    try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){setStatus('保存できませんでした（プライベートブラウズでは保存されません）',true)}
+  }
+  function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+  function setStatus(t,err){var el=$('status');el.textContent=t||'';el.className='status'+(err?' err':'')}
+  function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6)}
+
+  function slotItems(){
+    return state.items.filter(function(i){return i.slot===state.slot}).sort(function(a,b){
+      if(a.done!==b.done)return a.done?1:-1;
+      var ao=a.ord==null?1e9:a.ord, bo=b.ord==null?1e9:b.ord;
+      if(ao!==bo)return ao-bo;
+      return a.created-b.created;
+    });
+  }
+
+  function renderTabs(){
+    $('tabs').innerHTML=SLOTS.map(function(s){
+      var all=state.items.filter(function(i){return i.slot===s});
+      var left=all.filter(function(i){return !i.done}).length;
+      return '<button class="tab" role="tab" data-slot="'+s+'" aria-selected="'+(s===state.slot)+'">'+s+'<small>残り'+left+'/'+all.length+'</small></button>';
+    }).join('');
+  }
+
+  function renderList(){
+    var items=slotItems();
+    if(!items.length){
+      $('list').innerHTML='<div class="empty">この時間帯の物件はまだありません。<br>下のフォームから追加してください。</div>';
+      return;
+    }
+    $('list').innerHTML=items.map(function(i){
+      var tags='';
+      if(i.pri>0)tags+='<span class="tag pri">優先 '+i.pri+'番目</span>';
+      if(i.geoFail)tags+='<span class="tag bad">位置取得不可</span>';
+      else if(typeof i.dist==='number')tags+='<span class="tag">現在地から約'+fmtDist(i.dist)+'</span>';
+      if(i.done)tags+='<span class="tag">完了</span>';
+      return '<article class="item p'+i.pri+(i.done?' done':'')+'" data-id="'+i.id+'">'+
+        '<div class="top"><input class="chk" type="checkbox" data-act="done" '+(i.done?'checked':'')+' aria-label="完了">'+
+        '<div><div class="name">'+esc(i.name)+'</div><div class="addr">'+esc(i.addr)+'</div>'+
+        (tags?'<div class="meta">'+tags+'</div>':'')+'</div></div>'+
+        '<div class="acts"><button class="btn" data-act="nav">マップで案内開始</button>'+
+        '<button class="btn ghost" data-act="edit">編集</button>'+
+        '<button class="btn danger" data-act="del">削除</button></div></article>';
+    }).join('');
+  }
+
+  function render(){renderTabs();renderList()}
+
+  function fmtDist(m){return m<1000?Math.round(m)+'m':(m/1000).toFixed(1)+'km'}
+
+  // ---- form ----
+  function resetForm(){
+    editId=null;$('fName').value='';$('fAddr').value='';$('fPri').value='0';
+    $('formTitle').textContent='物件を追加';$('saveBtn').textContent='追加する';$('cancelBtn').hidden=true;
+  }
+  $('saveBtn').onclick=function(){
+    var name=$('fName').value.trim(), addr=$('fAddr').value.trim(), pri=parseInt($('fPri').value,10)||0;
+    if(!name||!addr){setStatus('物件名と住所は必須です。',true);return}
+    if(editId){
+      var it=state.items.find(function(x){return x.id===editId});
+      if(it){
+        if(it.addr!==addr){delete it.lat;delete it.lng;delete it.geoFail;delete it.dist}
+        it.name=name;it.addr=addr;it.pri=pri;
+      }
+    }else{
+      state.items.push({id:uid(),slot:state.slot,name:name,addr:addr,pri:pri,done:false,created:Date.now()});
+    }
+    save();resetForm();setStatus('');render();
+  };
+  $('cancelBtn').onclick=resetForm;
+
+  // ---- list actions ----
+  $('list').addEventListener('click',function(e){
+    var t=e.target.closest('[data-act]');if(!t)return;
+    var card=t.closest('.item');if(!card)return;
+    var it=state.items.find(function(x){return x.id===card.dataset.id});if(!it)return;
+    var act=t.dataset.act;
+    if(act==='nav'){
+      location.href='https://maps.apple.com/?daddr='+encodeURIComponent(it.addr)+'&dirflg=d';
+    }else if(act==='edit'){
+      editId=it.id;$('fName').value=it.name;$('fAddr').value=it.addr;$('fPri').value=String(it.pri||0);
+      $('formTitle').textContent='物件を編集';$('saveBtn').textContent='更新する';$('cancelBtn').hidden=false;
+      $('formPanel').scrollIntoView({behavior:'smooth',block:'center'});
+    }else if(act==='del'){
+      if(confirm('「'+it.name+'」を削除しますか？')){
+        state.items=state.items.filter(function(x){return x.id!==it.id});
+        if(editId===it.id)resetForm();
+        save();render();
+      }
+    }
+  });
+  $('list').addEventListener('change',function(e){
+    if(!e.target.matches('[data-act="done"]'))return;
+    var card=e.target.closest('.item');
+    var it=state.items.find(function(x){return x.id===card.dataset.id});
+    if(it){it.done=e.target.checked;save();render()}
+  });
+
+  // ---- tabs ----
+  $('tabs').addEventListener('click',function(e){
+    var t=e.target.closest('[data-slot]');if(!t)return;
+    state.slot=t.dataset.slot;save();resetForm();setStatus('');render();
+  });
+
+  // ---- clear ----
+  $('clearSlot').onclick=function(){
+    if(confirm('時間帯 '+state.slot+' の物件をすべて削除しますか？')){
+      state.items=state.items.filter(function(i){return i.slot!==state.slot});
+      save();resetForm();render();
+    }
+  };
+  $('clearAll').onclick=function(){
+    if(confirm('全時間帯のデータをすべて削除します。よろしいですか？')){
+      state.items=[];save();resetForm();render();
+    }
+  };
+
+  // ---- geocoding / routing ----
+  function sleep(ms){return new Promise(function(r){setTimeout(r,ms)})}
+  function fetchJson(url){
+    var ctl=new AbortController();var tm=setTimeout(function(){ctl.abort()},10000);
+    return fetch(url,{signal:ctl.signal}).then(function(r){clearTimeout(tm);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()});
+  }
+  function geocode(addr){
+    // 1) 国土地理院（日本の住所に強い）
+    return fetchJson('https://msearch.gsi.go.jp/address-search/AddressSearch?q='+encodeURIComponent(addr))
+      .then(function(d){
+        if(d&&d.length&&d[0].geometry){var c=d[0].geometry.coordinates;return {lat:c[1],lng:c[0]}}
+        throw new Error('none');
+      })
+      .catch(function(){
+        // 2) Nominatim（OpenStreetMap）
+        return sleep(1100).then(function(){
+          return fetchJson('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=ja&q='+encodeURIComponent(addr));
+        }).then(function(d){
+          if(d&&d.length)return {lat:parseFloat(d[0].lat),lng:parseFloat(d[0].lon)};
+          return null;
+        }).catch(function(){return null});
+      });
+  }
+  function haversine(a,b,c,d){
+    var R=6371000,r=Math.PI/180,dLat=(c-a)*r,dLng=(d-b)*r;
+    var x=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dLng/2)*Math.sin(dLng/2);
+    return 2*R*Math.asin(Math.sqrt(x));
+  }
+  function getPos(){
+    return new Promise(function(res,rej){
+      if(!navigator.geolocation)return rej(new Error('unsupported'));
+      navigator.geolocation.getCurrentPosition(res,rej,{enableHighAccuracy:true,timeout:15000,maximumAge:30000});
+    });
+  }
+
+  $('routeBtn').onclick=async function(){
+    var btn=this;
+    var targets=state.items.filter(function(i){return i.slot===state.slot&&!i.done});
+    if(!targets.length){setStatus('未完了の物件がありません。',true);return}
+    btn.disabled=true;
+    try{
+      setStatus('現在地を取得中…');
+      var pos;
+      try{pos=await getPos()}
+      catch(e){
+        setStatus('現在地を取得できませんでした。Safariの設定で位置情報を許可してください。',true);
+        return;
+      }
+      var me={lat:pos.coords.latitude,lng:pos.coords.longitude};
+      var n=0,total=targets.filter(function(i){return typeof i.lat!=='number'}).length;
+      for(var k=0;k<targets.length;k++){
+        var it=targets[k];
+        if(typeof it.lat!=='number'){
+          n++;setStatus('住所を検索中… ('+n+'/'+total+')');
+          var g=await geocode(it.addr);
+          if(g){it.lat=g.lat;it.lng=g.lng;it.geoFail=false}
+          else{it.geoFail=true}
+          save();
+        }
+        if(typeof it.lat==='number'){it.dist=haversine(me.lat,me.lng,it.lat,it.lng);it.geoFail=false}
+        else{delete it.dist}
+      }
+      // 並び替え: 優先1 → 優先2 → 近い順 → 位置取得不可
+      var rank=function(i){
+        if(i.geoFail&&i.pri===0)return 3;
+        if(i.pri===1)return 0;
+        if(i.pri===2)return 1;
+        return 2;
+      };
+      targets.sort(function(a,b){
+        var ra=rank(a),rb=rank(b);
+        if(ra!==rb)return ra-rb;
+        var da=typeof a.dist==='number'?a.dist:1e12,db=typeof b.dist==='number'?b.dist:1e12;
+        return da-db;
+      });
+      targets.forEach(function(it,idx){it.ord=idx});
+      save();render();
+      var fails=targets.filter(function(i){return i.geoFail}).length;
+      setStatus(fails?('並び替え完了。'+fails+'件は位置を取得できず末尾に置きました。'):'並び替え完了（現在地から近い順）。',!!fails);
+    }catch(e){
+      setStatus('エラーが発生しました。通信状況を確認してください。',true);
+    }finally{
+      btn.disabled=false;
+    }
+  };
+
+  render();
+})();
+</script>
+</body>
+</html>
